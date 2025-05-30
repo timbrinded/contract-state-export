@@ -12,11 +12,11 @@ contract DeployScript is Script {
         vm.startStateDiffRecording();
         // Using the first pre-funded account from Kurtosis
         uint256 deployerPrivateKey = 0xbcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31;
-        
+
         vm.startBroadcast(deployerPrivateKey);
-        
+
         SampleContract sample = new SampleContract();
-        
+
         Counter counter = new Counter();
         counter.setNumber(100);
         // Perform some transactions to populate state
@@ -29,113 +29,98 @@ contract DeployScript is Script {
         // Deploy the TimboTest contract
         TimboTest timboTest = new TimboTest();
         timboTest.decrement();
-        
+
         vm.stopBroadcast();
-        
+
         // Log the deployed contract address
         console.log("Deployed contract at:", address(sample));
         console.log("TimboTest deployed at:", address(timboTest));
-        
+
         // Get and log state diffs
         Vm.AccountAccess[] memory records = vm.stopAndReturnStateDiff();
         console.log("\n=== STATE DIFF RECORDING ===");
         console.log("Total state changes recorded:", records.length);
-        
+
         // Build simplified JSON with contract data
-        string memory json = _buildSimplifiedJson(records);
-        
-        // Output JSON to console
+        string memory output = _buildSimplifiedJson(records);
+
+        // Write JSON to console since file writes are restricted
         console.log("\n=== STATE DIFF JSON START ===");
-        console.log(json);
+        console.log(output);
         console.log("=== STATE DIFF JSON END ===");
     }
-    
+
     function _buildSimplifiedJson(Vm.AccountAccess[] memory records) internal pure returns (string memory) {
-        // Track unique contracts and their final storage
-        address[] memory contracts = new address[](records.length);
-        uint contractCount = 0;
-        
-        // First pass: identify unique contracts that were deployed
-        for (uint i = 0; i < records.length; i++) {
-            // Kind 4 is Create
-            if (uint(records[i].kind) == 4) {
-                bool found = false;
-                for (uint j = 0; j < contractCount; j++) {
-                    if (contracts[j] == records[i].account) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    contracts[contractCount] = records[i].account;
-                    contractCount++;
+        // -------------------------------------------------- collect unique CREATEs
+        address[] memory addrs = new address[](records.length);
+        uint256 n;
+        for (uint256 i = 0; i < records.length; i++) {
+            if (uint256(records[i].kind) != 4) continue; // not a CREATE
+            address a = records[i].account;
+            bool seen;
+            for (uint256 j = 0; j < n; j++) {
+                if (addrs[j] == a) {
+                    seen = true;
+                    break;
                 }
             }
+            if (!seen) addrs[n++] = a;
         }
-        
-        // Build JSON
+
+        // ------------------------------------------------ build JSON manually
         string memory json = "[";
-        for (uint i = 0; i < contractCount; i++) {
+
+        for (uint256 i = 0; i < n; i++) {
             if (i > 0) json = string.concat(json, ",");
-            json = string.concat(json, _serializeContract(contracts[i], records));
-        }
-        json = string.concat(json, "]");
-        
-        return json;
-    }
-    
-    function _serializeContract(address contractAddr, Vm.AccountAccess[] memory records) internal pure returns (string memory) {
-        string memory result = "{";
-        result = string.concat(result, '"address":"', vm.toString(contractAddr), '",');
-        
-        // Find the deployment record to get the code
-        bytes memory deployedCode;
-        for (uint i = 0; i < records.length; i++) {
-            if (records[i].account == contractAddr && uint(records[i].kind) == 4) {
-                deployedCode = records[i].deployedCode;
-                break;
-            }
-        }
-        
-        result = string.concat(result, '"code":"0x', vm.toString(deployedCode), '",');
-        
-        // Collect all unique storage slots and their final values
-        result = string.concat(result, '"storage":{');
-        
-        // Track processed slots to avoid duplicates
-        bytes32[] memory processedSlots = new bytes32[](100);
-        uint slotCount = 0;
-        bool firstSlot = true;
-        
-        // Process all storage accesses for this contract in reverse order to get final values
-        for (uint i = records.length; i > 0; i--) {
-            uint idx = i - 1;
-            if (records[idx].account == contractAddr) {
-                for (uint j = 0; j < records[idx].storageAccesses.length; j++) {
-                    Vm.StorageAccess memory access = records[idx].storageAccesses[j];
-                    if (access.isWrite && !access.reverted) {
-                        // Check if we've already processed this slot
-                        bool alreadyProcessed = false;
-                        for (uint k = 0; k < slotCount; k++) {
-                            if (processedSlots[k] == access.slot) {
-                                alreadyProcessed = true;
-                                break;
-                            }
-                        }
-                        
-                        if (!alreadyProcessed && access.newValue != bytes32(0)) {
-                            if (!firstSlot) result = string.concat(result, ",");
-                            result = string.concat(result, '"', vm.toString(access.slot), '":"', vm.toString(access.newValue), '"');
-                            processedSlots[slotCount] = access.slot;
-                            slotCount++;
-                            firstSlot = false;
-                        }
-                    }
+
+            address c = addrs[i];
+            json = string.concat(json, '{"address":"', vm.toString(c), '",');
+
+            // Find deployment code
+            bytes memory code;
+            for (uint256 j = 0; j < records.length; j++) {
+                if (records[j].account == c && uint256(records[j].kind) == 4) {
+                    code = records[j].deployedCode;
+                    break;
                 }
             }
+            json = string.concat(json, '"code":"', vm.toString(code), '",');
+
+            // Build storage object
+            json = string.concat(json, '"storage":{');
+            bytes32[] memory done = new bytes32[](100);
+            uint256 doneCnt;
+            bool firstSlot = true;
+
+            // Process storage accesses in reverse order to get final values
+            for (uint256 j = records.length; j > 0; j--) {
+                Vm.AccountAccess memory r = records[j - 1];
+                if (r.account != c) continue;
+
+                for (uint256 s = 0; s < r.storageAccesses.length; s++) {
+                    Vm.StorageAccess memory a = r.storageAccesses[s];
+                    if (!a.isWrite || a.reverted || a.newValue == bytes32(0)) continue;
+
+                    bool dup;
+                    for (uint256 d = 0; d < doneCnt; d++) {
+                        if (done[d] == a.slot) {
+                            dup = true;
+                            break;
+                        }
+                    }
+                    if (dup) continue;
+
+                    if (!firstSlot) json = string.concat(json, ",");
+                    json = string.concat(json, '"', vm.toString(a.slot), '":"', vm.toString(a.newValue), '"');
+                    done[doneCnt++] = a.slot;
+                    firstSlot = false;
+                }
+            }
+
+            json = string.concat(json, "}}");
         }
-        
-        result = string.concat(result, "}}");
-        return result;
+
+        json = string.concat(json, "]");
+        return json;
     }
 }

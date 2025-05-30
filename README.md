@@ -13,12 +13,12 @@ forge install
 ### 2. Deploy contracts and export state
 
 ```bash
-forge script script/Deploy.s.sol:DeployScript --rpc-url http://127.0.0.1:32801 | sed -n '/=== STATE DIFF JSON START ===/,/=== STATE DIFF JSON END ===/p' | sed '1d;$d' > state-diff-simple.json
+forge script script/Deploy.s.sol:DeployScript --rpc-url http://127.0.0.1:32801 | sed -n '/=== STATE DIFF JSON START ===/,/=== STATE DIFF JSON END ===/p' | sed '1d;$d' > state-diff.json
 ```
 
 ## Output Format
 
-The generated `state-diff-simple.json` contains:
+The generated `state-diff.json` contains:
 
 - Contract address
 - Deployed bytecode
@@ -54,5 +54,5 @@ Example:
 ### With broadcast (actually deploy to network)
 
 ```bash
-forge script script/Deploy.s.sol:DeployScript --rpc-url http://127.0.0.1:32801 --broadcast | sed -n '/=== STATE DIFF JSON START ===/,/=== STATE DIFF JSON END ===/p' | sed '1d;$d' > state-diff-simple.json
+forge script script/Deploy.s.sol:DeployScript --rpc-url http://127.0.0.1:32801 --broadcast
 ```
