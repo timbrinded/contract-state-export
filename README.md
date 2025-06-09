@@ -13,7 +13,7 @@ forge install
 ### 2. Deploy contracts and export state
 
 ```bash
-forge script script/Deploy.s.sol:DeployScript --rpc-url http://127.0.0.1:32801 | sed -n '/=== STATE DIFF JSON START ===/,/=== STATE DIFF JSON END ===/p' | sed '1d;$d' > state-diff.json
+forge script script/Deploy.s.sol:DeployScript --rpc-url http://127.0.0.1:32790 --broadcast
 ```
 
 ## Output Format

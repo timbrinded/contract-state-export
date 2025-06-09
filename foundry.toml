@@ -3,4 +3,11 @@ src = "src"
 out = "out"
 libs = ["lib"]
 
+# File system permissions for scripts
+fs_permissions = [
+    { access = "read-write", path = "./" },
+    { access = "read", path = "./out" },
+    { access = "read", path = "./broadcast" }
+]
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
